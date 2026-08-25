@@ -430,7 +430,7 @@ def ingest_logs():
                 if arch_code is not None:
                     if arch_code not in arch_cache:
                         arch = Architecture.find(arch_code, syno=True)
-                        arch_cache[arch_code] = arch.id
+                        arch_cache[arch_code] = arch.id if arch else None
                     architecture_id = arch_cache[arch_code]
                 else:
                     architecture_id = None
