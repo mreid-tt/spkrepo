@@ -35,6 +35,17 @@ OBJECT_STORAGE_PACKAGES_SECRET_KEY = None
 CDN_PURGE_TOKEN = None
 PACKAGES_CDN_HOST = None
 
+# Cloudflare Turnstile (bot protection on registration). Only the secret is
+# sensitive — the site key and hostname are public. Set real values in the
+# production config; when unset, registration fail-closes (see
+# SpkrepoRegisterForm).
+TURNSTILE_SITE_KEY = None
+TURNSTILE_SECRET_KEY = os.environ.get("TURNSTILE_SECRET_KEY")
+# Hostname the Turnstile widget is registered for (e.g. "example.com").
+# When set, the siteverify response hostname must match; when unset the
+# check is skipped (dev/test).
+TURNSTILE_HOSTNAME = None
+
 # Security
 SECURITY_CACHE_CONTROL = {}
 SECURITY_CONFIRMABLE = True
@@ -68,12 +79,17 @@ MIGRATE_DIRECTORY = os.path.abspath(
 CACHE_TYPE = "flask_caching.backends.RedisCache"
 CACHE_REDIS_HOST = "localhost"
 
+# Rate limiting (per-IP, proxy-aware via get_client_ip). Dedicated DB 2 keeps
+# counters isolated from the cache (DB 0) and Celery (DB 1); shared across
+# gunicorn workers, with memory fallback covering redis outages. Tests
+# override the URI to memory:// (see tests/common.py).
+RATELIMIT_STORAGE_URI = "redis://localhost:6379/2"
+RATELIMIT_IN_MEMORY_FALLBACK_ENABLED = True
+
 # Tasks
 CELERY = {
-    "broker_url": os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/1"),
-    "result_backend": os.environ.get(
-        "CELERY_RESULT_BACKEND", "redis://localhost:6379/1"
-    ),
+    "broker_url": "redis://localhost:6379/1",
+    "result_backend": "redis://localhost:6379/1",
     "result_expires": 86400,  # clean up task results after 24 hours
     "task_queues": {
         "celery": {},  # default queue for anything else
