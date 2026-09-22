@@ -33,11 +33,41 @@ class TestSharedKernel:
         with pytest.raises(ValueError):
             shared_kernel.parse_version("1.2.3")
 
-    def test_build_filename(self):
-        assert (
-            shared_kernel.build_filename("git", 4, 42661, ["x86_64", "noarch"])
-            == "git.v4.f42661[x86_64-noarch].spk"
-        )
+    @pytest.mark.parametrize(
+        "archs,expected",
+        [
+            (["x86_64", "noarch"], "git.v4.f42661[x86_64-noarch].spk"),
+            (["noarch"], "git.v4.f42661[noarch].spk"),
+        ],
+    )
+    def test_build_filename(self, archs, expected):
+        assert shared_kernel.build_filename("git", 4, 42661, archs) == expected
+
+    def test_build_filename_truncates_long_arch_list(self):
+        archs = [f"arch{i:02d}xxxxxxxx" for i in range(40)]
+        name = shared_kernel.build_filename("pkg", 1, 42661, archs)
+        # Bounded, with headroom for the ".json" sidecar.
+        assert len(name.encode("utf-8")) <= shared_kernel.MAX_BUILD_FILENAME
+        assert len(name.encode("utf-8")) + len(".json") <= 255
+        # Readable prefix kept, remainder collapsed to a token, one bracket group.
+        assert name.startswith("pkg.v1.f42661[arch00")
+        assert name.endswith("].spk")
+        assert name.count("[") == 1 and name.count("]") == 1
+        # The parser still recovers the target firmware.
+        assert shared_kernel.parse_filename_target(name) == (42661, False)
+
+    def test_build_filename_truncation_preserves_noarch(self):
+        archs = ["x86_64", *[f"longarch{i:02d}xxxx" for i in range(40)], "noarch"]
+        name = shared_kernel.build_filename("pkg", 1, 42661, archs)
+        assert len(name.encode("utf-8")) <= shared_kernel.MAX_BUILD_FILENAME
+        assert "noarch" in name
+        assert shared_kernel.parse_filename_target(name) == (None, True)
+
+    def test_build_filename_truncation_is_unique(self):
+        base = [f"arch{i:02d}xxxxxxxx" for i in range(40)]
+        a = shared_kernel.build_filename("pkg", 1, 42661, [*base, "aaa"])
+        b = shared_kernel.build_filename("pkg", 1, 42661, [*base, "bbb"])
+        assert a != b
 
     @pytest.mark.parametrize(
         "info,expected",
